@@ -1,9 +1,9 @@
 import React from 'react';
-import { AUTH_TOKEN } from '../constants';
 import { useMutation, gql } from '@apollo/client';
 import { timeDifferenceForDate } from '../utils';
 import { FEED_QUERY } from './LinkList';
 import { useQuery } from '@apollo/client';
+import { AUTH_TOKEN, LINKS_PER_PAGE } from '../constants';
 
 const VOTE_MUTATION = gql`
   mutation VoteMutation($linkId: ID!) {
@@ -49,47 +49,49 @@ const NEW_LINKS_SUBSCRIPTION = gql`
 const Link = (props) => {
   const { link } = props;
   const authToken = localStorage.getItem(AUTH_TOKEN);
-  const {
-    data,
-    loading,
-    error,
-    subscribeToMore
-  } = useQuery(FEED_QUERY);
+  const { data, loading, error, subscribeToMore } = useQuery(FEED_QUERY);
 
   subscribeToMore({
     document: NEW_LINKS_SUBSCRIPTION,
     updateQuery: (prev, { subscriptionData }) => {
       if (!subscriptionData.data) return prev;
       const newLink = subscriptionData.data.newLink;
-      const exists = prev.feed.links.find(
-        ({ id }) => id === newLink.id
-      );
+      const exists = prev.feed.links.find(({ id }) => id === newLink.id);
       if (exists) return prev;
-  
+
       return Object.assign({}, prev, {
         feed: {
           links: [newLink, ...prev.feed.links],
           count: prev.feed.links.length + 1,
-          __typename: prev.feed.__typename
-        }
+          __typename: prev.feed.__typename,
+        },
       });
-    }
+    },
   });
+
+  const take = LINKS_PER_PAGE;
+  const skip = 0;
+  const orderBy = { createdAt: 'desc' };
 
   const [vote] = useMutation(VOTE_MUTATION, {
     variables: {
-      linkId: link.id
+      linkId: link.id,
     },
-    update: (cache, {data: {vote}}) => {
+    update: (cache, { data: { vote } }) => {
       const { feed } = cache.readQuery({
-        query: FEED_QUERY
+        query: FEED_QUERY,
+        variables: {
+          take,
+          skip,
+          orderBy,
+        },
       });
 
       const updatedLinks = feed.links.map((feedLink) => {
         if (feedLink.id === link.id) {
           return {
             ...feedLink,
-            votes: [...feedLink.votes, vote]
+            votes: [...feedLink.votes, vote],
           };
         }
         return feedLink;
@@ -99,13 +101,17 @@ const Link = (props) => {
         query: FEED_QUERY,
         data: {
           feed: {
-            links: updatedLinks
-          }
-        }
+            links: updatedLinks,
+          },
+        },
+        variables: {
+          take,
+          skip,
+          orderBy,
+        },
       });
-    }
+    },
   });
-
 
   return (
     <div className="flex mt2 items-start">
