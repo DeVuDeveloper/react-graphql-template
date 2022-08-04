@@ -1,12 +1,10 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, gql } from '@apollo/client';
+import { FEED_QUERY } from './LinkList';
 
 const CREATE_LINK_MUTATION = gql`
-  mutation PostMutation(
-    $description: String!
-    $url: String!
-  ) {
+  mutation PostMutation($description: String!, $url: String!) {
     post(description: $description, url: $url) {
       id
       createdAt
@@ -16,19 +14,33 @@ const CREATE_LINK_MUTATION = gql`
   }
 `;
 const CreateLink = () => {
-    const navigate = useNavigate();
-    const [formState, setFormState] = useState({
-        description: '',
-        url: ''
-    });
-    
-    const [createLink] = useMutation(CREATE_LINK_MUTATION, {
-        variables: {
-          description: formState.description,
-          url: formState.url
-        },
-        onCompleted: () => navigate('/')
+  const navigate = useNavigate();
+  const [formState, setFormState] = useState({
+    description: '',
+    url: '',
+  });
+
+  const [createLink] = useMutation(CREATE_LINK_MUTATION, {
+    variables: {
+      description: formState.description,
+      url: formState.url,
+    },
+    update: (cache, { data: { post } }) => {
+      const data = cache.readQuery({
+        query: FEED_QUERY,
       });
+
+      cache.writeQuery({
+        query: FEED_QUERY,
+        data: {
+          feed: {
+            links: [post, ...data.feed.links],
+          },
+        },
+      });
+    },
+    onCompleted: () => navigate('/'),
+  });
 
   return (
     <div>
@@ -45,7 +57,7 @@ const CreateLink = () => {
             onChange={(e) =>
               setFormState({
                 ...formState,
-                description: e.target.value
+                description: e.target.value,
               })
             }
             type="text"
@@ -57,7 +69,7 @@ const CreateLink = () => {
             onChange={(e) =>
               setFormState({
                 ...formState,
-                url: e.target.value
+                url: e.target.value,
               })
             }
             type="text"
